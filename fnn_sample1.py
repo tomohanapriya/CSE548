@@ -4,11 +4,7 @@ Updated on Wed Jan 29 10:18:09 2020
 @author: created by Sowmya Myneni and updated by Dijiang Huang
 """
 """
-Updated on November 22, 2022
-@author:Anirudh Kumar
-Added preprocessing, splitting of testing and training datasets,
-and selection of Scenario.
-"""
+
 ########################################
 # Part 1 - Datasets Pre-Processing
 #######################################
@@ -39,4 +35,5 @@ TestingData = ScenarioC[1]
 break
 # Batch Size
 This study source was downloaded by 100000869502194 from CourseHero.com on 11-30-2025 19:23:14 GMT -06:00
+
 https://www.coursehero.com/file/210839344/fnn-samplepy/
