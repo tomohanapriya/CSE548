@@ -1,108 +1,117 @@
-# fnn_task3.py
-# Updated FNN model for Task 3 (SA, SB, SC)
+# -*- coding: utf-8 -*-
+# Modified for Task 3 – Deep Learning using extracted CSV files
 
 import pandas as pd
 import numpy as np
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from sklearn.metrics import accuracy_score, confusion_matrix
 
-# ----------------------------
-# Scenario configuration
-# ----------------------------
-scenarios = {
-    'SA': {
-        'train': 'Training-a1-a3-a0.csv',
-        'test':  'Testing-a2-a4-a0.csv',
-        'unseen_classes': [2, 4]
+# ---------------------------
+# CHOOSE SCENARIO HERE:
+# SA, SB, or SC
+# ---------------------------
+SCENARIO = "SA"
+
+# Scenario file mapping
+scenario_files = {
+    "SA": {
+        "train": "Training-a1-a3-a0.csv",
+        "test":  "Testing-a2-a4-a0.csv"
     },
-    'SB': {
-        'train': 'Training-a1-a2-a0.csv',
-        'test':  'Testing-a1-a0.csv',
-        'unseen_classes': []
+    "SB": {
+        "train": "Training-a1-a2-a0.csv",
+        "test":  "Testing-a1-a0.csv"
     },
-    'SC': {
-        'train': 'Training-a1-a2-a0.csv',
-        'test':  'Testing-a1-a2-a3.csv',
-        'unseen_classes': [3]
+    "SC": {
+        "train": "Training-a1-a2-a0.csv",
+        "test":  "Testing-a1-a2-a3.csv"
     }
 }
 
-# ----------------------------
-# Run Scenario Function
-# ----------------------------
-def run_scenario(name, cfg):
+train_file = scenario_files[SCENARIO]["train"]
+test_file  = scenario_files[SCENARIO]["test"]
 
-    print("\n==========================")
-    print(f" Running Scenario {name} ")
-    print("==========================")
+print(f"\n=== Running Scenario {SCENARIO} ===")
+print(f"Training File: {train_file}")
+print(f"Testing File : {test_file}\n")
 
-    # Load CSV
-    train_df = pd.read_csv(cfg['train'])
-    test_df  = pd.read_csv(cfg['test'])
+# ---------------------------
+# Load train/test data
+# ---------------------------
+train_df = pd.read_csv(train_file)
+test_df = pd.read_csv(test_file)
 
-    # Separate features and labels
-    X_train = train_df.iloc[:, :-1].values
-    y_train = train_df.iloc[:, -1].values
-    X_test  = test_df.iloc[:, :-1].values
-    y_test  = test_df.iloc[:, -1].values
+# Features and labels
+X_train = train_df.iloc[:, :-1].values
+y_train = train_df.iloc[:, -1].values
+X_test  = test_df.iloc[:, :-1].values
+y_test  = test_df.iloc[:, -1].values
 
-    # ----------------------------
-    # Build FNN Model (simple)
-    # ----------------------------
-    model = Sequential()
-    model.add(Dense(64, input_dim=X_train.shape[1], activation='relu'))
-    model.add(Dense(32, activation='relu'))
-    model.add(Dense(1, activation='sigmoid'))
+# ---------------------------
+# Normalize
+# ---------------------------
+from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test  = sc.transform(X_test)
 
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+# ---------------------------
+# Build FNN
+# ---------------------------
+from keras.models import Sequential
+from keras.layers import Dense
 
-    # ----------------------------
-    # Train
-    # ----------------------------
-    history = model.fit(
-        X_train, y_train,
-        epochs=20,
-        batch_size=32,
-        verbose=1,
-        validation_data=(X_test, y_test)
-    )
+classifier = Sequential()
 
-    # ----------------------------
-    # Predictions
-    # ----------------------------
-    y_pred_prob = model.predict(X_test)
-    y_pred = (y_pred_prob > 0.5).astype(int).flatten()
+classifier.add(Dense(units=64, kernel_initializer='uniform',
+                     activation='relu', input_dim=X_train.shape[1]))
+classifier.add(Dense(units=32, kernel_initializer='uniform', activation='relu'))
+classifier.add(Dense(units=1, kernel_initializer='uniform', activation='sigmoid'))
 
-    # ----------------------------
-    # Overall Accuracy
-    # ----------------------------
-    overall = accuracy_score(y_test, y_pred)
-    print(f"Overall Accuracy: {overall:.4f}")
+classifier.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-    # ----------------------------
-    # Unseen class accuracy (Task 3 requirement)
-    # ----------------------------
-    unseen = cfg["unseen_classes"]
-    if unseen:
-        mask = test_df.iloc[:, -1].isin(unseen)
-        if mask.sum() > 0:
-            unseen_acc = accuracy_score(y_test[mask], y_pred[mask])
-            print(f"Accuracy on unseen attack classes {unseen}: {unseen_acc:.4f}")
-        else:
-            print("No unseen class samples found.")
-    else:
-        print("No unseen classes in this scenario.")
+# Train
+history = classifier.fit(
+    X_train, y_train,
+    batch_size=32,
+    epochs=20,
+    verbose=1
+)
 
-    # ----------------------------
-    # Confusion Matrix
-    # ----------------------------
-    cm = confusion_matrix(y_test, y_pred)
-    print("\nConfusion Matrix:")
-    print(cm)
+# ---------------------------
+# Evaluate
+# ---------------------------
+loss, accuracy = classifier.evaluate(X_test, y_test)
+print("\n=== MODEL PERFORMANCE ===")
+print("Loss     :", loss)
+print("Accuracy :", accuracy)
 
-# ----------------------------
-# Main: run all scenarios
-# ----------------------------
-for scenario_name, cfg in scenarios.items():
-    run_scenario(scenario_name, cfg)
+# Predict
+y_pred_prob = classifier.predict(X_test)
+y_pred = (y_pred_prob > 0.5).astype(int)
+
+# ---------------------------
+# Confusion Matrix
+# ---------------------------
+from sklearn.metrics import confusion_matrix
+cm = confusion_matrix(y_test, y_pred)
+
+print("\nConfusion Matrix:")
+print(cm)
+
+# ---------------------------
+# Plot accuracy and loss
+# ---------------------------
+import matplotlib.pyplot as plt
+
+plt.plot(history.history['accuracy'])
+plt.title('Model Accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.savefig('accuracy.png')
+plt.show()
+
+plt.plot(history.history['loss'])
+plt.title('Model Loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.savefig('loss.png')
+plt.show()
