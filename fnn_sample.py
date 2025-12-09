@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
-# Fully fixed FNN code for Task 3 – handles categorical features + scenarios
+# Run all 3 scenarios (SA, SB, SC) and save results
 
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix
 
-# ---------------------------
-# SCENARIO SELECTION
-# ---------------------------
-SCENARIO = "SA"    # Change to SA / SB / SC
+from keras.models import Sequential
+from keras.layers import Dense
 
+# ---------------------------------------------------------
+# Scenario file mapping
+# ---------------------------------------------------------
 scenario_files = {
     "SA": {
         "train": "Training-a1-a3-a0.csv",
@@ -24,116 +28,120 @@ scenario_files = {
     }
 }
 
-train_file = scenario_files[SCENARIO]["train"]
-test_file  = scenario_files[SCENARIO]["test"]
+# To store results for summary table
+summary_rows = []
 
-print(f"\n=== Running Scenario {SCENARIO} ===")
-print(f"Training: {train_file}")
-print(f"Testing : {test_file}\n")
+# ---------------------------------------------------------
+# Run all scenarios
+# ---------------------------------------------------------
+for SCENARIO in ["SA", "SB", "SC"]:
 
-# ---------------------------
-# LOAD CSV FILES
-# ---------------------------
-train_df = pd.read_csv(train_file)
-test_df  = pd.read_csv(test_file)
+    print("\n====================================")
+    print(f"=== Running Scenario {SCENARIO} ===")
+    print("====================================")
 
-# Separate features & labels
-y_train = train_df.iloc[:, -1]
-y_test  = test_df.iloc[:, -1]
+    train_file = scenario_files[SCENARIO]["train"]
+    test_file  = scenario_files[SCENARIO]["test"]
 
-X_train = train_df.iloc[:, :-1]
-X_test  = test_df.iloc[:, :-1]
+    print(f"Training File: {train_file}")
+    print(f"Testing File : {test_file}\n")
 
-# ---------------------------
-# FIX CATEGORICAL COLUMNS → One-hot encode
-# ---------------------------
-print("\n[INFO] Converting categorical features...\n")
+    # ---------------------------
+    # Load Data
+    # ---------------------------
+    train_df = pd.read_csv(train_file)
+    test_df = pd.read_csv(test_file)
 
-X_train = pd.get_dummies(X_train)
-X_test  = pd.get_dummies(X_test)
+    X_train = train_df.iloc[:, :-1].values
+    y_train = train_df.iloc[:, -1].values
+    X_test  = test_df.iloc[:, :-1].values
+    y_test  = test_df.iloc[:, -1].values
 
-# Ensure train and test have identical columns
-X_train, X_test = X_train.align(X_test, join='left', axis=1, fill_value=0)
+    # ---------------------------
+    # Normalize
+    # ---------------------------
+    sc = StandardScaler()
+    X_train = sc.fit_transform(X_train)
+    X_test  = sc.transform(X_test)
 
-# Convert to numpy
-X_train = X_train.values
-X_test  = X_test.values
+    # ---------------------------
+    # Build Model
+    # ---------------------------
+    classifier = Sequential()
+    classifier.add(Dense(units=64, kernel_initializer='uniform',
+                         activation='relu', input_dim=X_train.shape[1]))
+    classifier.add(Dense(units=32, kernel_initializer='uniform', activation='relu'))
+    classifier.add(Dense(units=1, kernel_initializer='uniform', activation='sigmoid'))
 
-# ---------------------------
-# ENCODE LABELS
-# ---------------------------
-y_train = y_train.apply(lambda x: 0 if x == 'normal' else 1).values
-y_test  = y_test.apply(lambda x: 0 if x == 'normal' else 1).values
+    classifier.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-# ---------------------------
-# NORMALIZATION
-# ---------------------------
-from sklearn.preprocessing import StandardScaler
+    # Train
+    history = classifier.fit(
+        X_train, y_train,
+        batch_size=32,
+        epochs=20,
+        verbose=1
+    )
 
-sc = StandardScaler()
-X_train = sc.fit_transform(X_train)
-X_test  = sc.transform(X_test)
+    # Evaluate
+    loss, accuracy = classifier.evaluate(X_test, y_test)
+    print("\n=== MODEL PERFORMANCE ===")
+    print("Loss     :", loss)
+    print("Accuracy :", accuracy)
 
-# ---------------------------
-# BUILD FNN MODEL
-# ---------------------------
-from keras.models import Sequential
-from keras.layers import Dense
+    # Predict
+    y_pred_prob = classifier.predict(X_test)
+    y_pred = (y_pred_prob > 0.5).astype(int)
 
-model = Sequential()
-model.add(Dense(64, activation='relu', input_dim=X_train.shape[1]))
-model.add(Dense(32, activation='relu'))
-model.add(Dense(1, activation='sigmoid'))  # Binary classifier
+    # ---------------------------
+    # Confusion Matrix
+    # ---------------------------
+    cm = confusion_matrix(y_test, y_pred)
+    print("\nConfusion Matrix:")
+    print(cm)
 
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    # Save confusion matrix
+    cm_df = pd.DataFrame(cm)
+    cm_filename = f"confusion_matrix_{SCENARIO}.csv"
+    cm_df.to_csv(cm_filename, index=False)
+    print(f"[SAVED] {cm_filename}")
 
-# ---------------------------
-# TRAIN
-# ---------------------------
-print("\n[INFO] Training model...\n")
+    # ---------------------------
+    # Plot accuracy
+    # ---------------------------
+    plt.figure()
+    plt.plot(history.history['accuracy'])
+    plt.title(f'Model Accuracy - {SCENARIO}')
+    plt.ylabel('accuracy')
+    plt.xlabel('epoch')
+    acc_filename = f'accuracy_{SCENARIO}.png'
+    plt.savefig(acc_filename)
+    plt.close()
+    print(f"[SAVED] {acc_filename}")
 
-history = model.fit(
-    X_train, y_train,
-    batch_size=32,
-    epochs=20,
-    verbose=1
-)
+    # ---------------------------
+    # Plot loss
+    # ---------------------------
+    plt.figure()
+    plt.plot(history.history['loss'])
+    plt.title(f'Model Loss - {SCENARIO}')
+    plt.ylabel('loss')
+    plt.xlabel('epoch')
+    loss_filename = f'loss_{SCENARIO}.png'
+    plt.savefig(loss_filename)
+    plt.close()
+    print(f"[SAVED] {loss_filename}")
 
-# ---------------------------
-# EVALUATE
-# ---------------------------
-print("\n[INFO] Evaluating model...\n")
-loss, accuracy = model.evaluate(X_test, y_test)
-print("\n=== MODEL PERFORMANCE ===")
-print("Loss     :", loss)
-print("Accuracy :", accuracy)
+    # Add to summary table
+    summary_rows.append([SCENARIO, loss, accuracy])
 
-# Predictions
-y_pred_prob = model.predict(X_test)
-y_pred = (y_pred_prob > 0.5).astype(int)
+# ---------------------------------------------------------
+# Create Summary Results Table
+# ---------------------------------------------------------
+summary_df = pd.DataFrame(summary_rows, columns=["Scenario", "Loss", "Accuracy"])
+summary_df.to_csv("summary_results.csv", index=False)
 
-# ---------------------------
-# CONFUSION MATRIX
-# ---------------------------
-from sklearn.metrics import confusion_matrix
-cm = confusion_matrix(y_test, y_pred)
-
-print("\nConfusion Matrix:")
-print(cm)
-
-# ---------------------------
-# PLOTS
-# ---------------------------
-import matplotlib.pyplot as plt
-
-plt.plot(history.history["accuracy"])
-plt.title("Training Accuracy")
-plt.xlabel("Epoch")
-plt.ylabel("Accuracy")
-plt.show()
-
-plt.plot(history.history["loss"])
-plt.title("Training Loss")
-plt.xlabel("Epoch")
-plt.ylabel("Loss")
-plt.show()
+print("\n====================================")
+print("ALL SCENARIOS COMPLETED SUCCESSFULLY")
+print("Summary saved to summary_results.csv")
+print("====================================")
